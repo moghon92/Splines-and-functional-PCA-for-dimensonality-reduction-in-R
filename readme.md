@@ -1,0 +1,11 @@
+Splines and functional PCA (Principal Component Analysis) are techniques commonly used for dimensionality reduction and analysis of functional data, where the data points are curves or functions rather than traditional numerical or categorical values.
+
+## Splines:
+Splines are a mathematical tool used to approximate curves or functions. They are often used in data analysis and modeling to represent smooth and flexible curves that capture the underlying patterns in the data. Splines work by dividing the curve into smaller segments and using piecewise polynomial functions to approximate each segment. These polynomial functions are smoothly joined together at specific points called knots, ensuring continuity and smoothness of the overall curve.
+
+In the context of dimensionality reduction, splines can be applied to functional data to reduce the dimensionality of the curves while preserving important features. This can be done by fitting a spline basis to the data and then representing each curve as a linear combination of the spline basis functions. By choosing a small number of basis functions, the dimensionality of the data can be effectively reduced while retaining the essential characteristics of the curves.
+
+## Functional PCA:
+Functional PCA is a technique that extends traditional PCA to functional data. PCA is a popular method for dimensionality reduction in multivariate data, but it assumes that the data points are vectors. In the case of functional data, such as curves or functions, traditional PCA methods are not directly applicable.
+
+Functional PCA treats the curves or functions as observations and aims to find the dominant modes of variation in the data. It achieves this by representing the curves as an infinite-dimensional vector space and finding the principal components, which are linear combinations of the curves that capture the most significant sources of variation. These principal components correspond to the modes of variation that explain the majority of the variance in the functional data.

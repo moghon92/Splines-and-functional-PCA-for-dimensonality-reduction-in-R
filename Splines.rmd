@@ -1,0 +1,283 @@
+---
+title: "Splines"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read the Data
+```{r}
+data <- as.matrix(read.table("P04.csv",sep=",",stringsAsFactors = FALSE, header=FALSE, col.names
+=c("year", "energy")))
+
+head(data)
+```
+
+
+### Create the X,Y vectors from data
+```{r}
+Y = data[1:69,2]
+X = seq(1,length(Y))
+```
+
+
+### Plot the data
+```{r}
+plot(X,Y)
+```
+
+
+# A) Cubic spline (d.o.f = 4+k)
+
+
+### LOOCV to find best K (that minimizes MSE)
+```{r}
+h1 = rep(1,length(X))
+h2 = X
+h3 = X^2
+h4 = X^3
+
+
+mse = rep(0, 15)
+for(k in 6:15)
+{
+  H = cbind(h1, h2, h3, h4)
+  k_all = seq(1,length(X),length.out = (k+2))[2:(k+1)]
+  
+  for(j in 1:k)
+  {
+    h_j = (X-k_all[j])^3
+    h_j[h_j <= 0] = 0
+    H = cbind(H, h_j)
+  }
+  
+  ##LOOCV
+  error = rep(0, length(X)-1)
+  
+  for(i in 1:length(X))
+  {
+    X1=X[-i]
+    Y1=Y[-i]
+    H1=H[-i,] 
+    B1=solve(t(H1)%*%H1)%*%t(H1)%*%Y1
+    error[i]= Y[i]-(H[i,]%*%B1)
+  }
+  
+  
+  mse[k]=sum(error^2)/length(X)
+  
+
+}
+k=seq(6,15)
+MSE=mse[6:15]
+plot(k,MSE ,type='l', col = "red")
+```
+
+### Report min MSE and best k
+```{r}
+print(paste("Min MSE = ", min(MSE) ))
+print(paste("Best K = ", k[which.min(MSE)] ))
+
+```
+
+### Apply the cubic Spline with best K (k=7)
+```{r}
+k=7
+
+h1 = rep(1,length(X))
+h2 = X
+h3 = X^2
+h4 = X^3
+H = cbind(h1, h2, h3, h4)
+
+k_all = seq(1,length(X),length.out = (k+2))[2:(k+1)]
+
+for(j in 1:k)
+{
+  h_j = (X-k_all[j])^3
+  h_j[h_j <= 0] = 0
+  H = cbind(H, h_j)
+}
+
+yhat=H %*% solve(t(H)%*%H)%*%t(H)%*%Y
+
+#sigma2 = (1/(69-k))*t(Y-yhat)%*%(Y-yhat)
+#yn = yhat-3*sqrt(diag(as.numeric(sigma2)*H%*%solve(t(H)%*%H)%*%t(H)))
+#yp = yhat+3*sqrt(diag(as.numeric(sigma2)*H%*%solve(t(H)%*%H)%*%t(H)))
+plot(X,Y,col = "red")
+#lines(X,yn,col = "blue")
+#lines(X,yp,col = "blue")
+lines(X,yhat,col = "black")
+
+```
+
+
+# B) B-spline
+
+```{r}
+library(splines)
+```
+
+
+### LOOCV to find best K (that minimizes MSE)
+```{r}
+mse = rep(0, 15)
+for(k in 6:15)
+{
+  nbasis=k+3-2   #nbreaks + order - 2 ; order=3 for quadrtic
+  k_all = seq(1,length(X),length.out = k)
+  
+  B = bs(X, knots = k_all, degree = 2,intercept = FALSE)[,1:nbasis]
+
+  ##LOOCV
+  error = rep(0, length(X)-1)
+  
+  for(i in 1:length(X))
+  {
+    X1=X[-i]
+    Y1=Y[-i]
+    B_new=B[-i,]
+    BS = solve(t(B_new)%*%B_new)%*%t(B_new)%*%Y1
+    error[i]= Y[i]-(B[i,]%*%BS)
+  }
+  
+  mse[k]=sum(error^2)/length(X)
+  
+}
+
+k=seq(6,15)
+MSE=mse[6:15]
+plot(k,MSE ,type='l', col = "red")
+
+
+```
+
+### Report min MSE and best k
+```{r}
+print(paste("Min MSE = ", min(MSE) ))
+print(paste("Best K = ", k[which.min(MSE)] ))
+
+```
+
+### Apply the cubic Spline with best K (k=11)
+```{r}
+k=11
+
+# nbreaks + order - 2, order=3 for quadrtic
+nbasis=k+3-2
+k_all = seq(1,length(X),length.out = k)
+
+B = bs(X, knots = k_all, degree = 2,intercept = FALSE)[,1:nbasis]
+# Least square estimation
+yhat = B%*%solve(t(B)%*%B)%*%t(B)%*%Y
+
+plot(X,Y,col = "red")
+lines(X,yhat,col = "black")
+  
+```
+
+
+
+# C) Smoothing Splines
+```{r}
+# lambda = (df = n)
+
+lambdas=seq(2e-6,1e-4, length.out = 138)
+mse=rep(0, 100)
+index=1
+
+for (l in lambdas) {
+  
+  error = rep(0, length(X)-1)
+  for(i in 1:length(X))
+  {
+    X1=X[-i]
+    Y1=Y[-i]
+    k=length(X1)
+    sm = smooth.spline(X1,Y1,nknots=k, lambda=l)
+    error[i]= Y[i]-(predict(sm,X[i])$y)
+  }
+ 
+  mse[index]=sum(error^2)/length(X)
+  index=index+1
+  
+}
+plot(lambdas,mse, type='l')
+best_lambda = lambdas[which.min(mse)]
+```
+
+
+### Report min MSE and best lambda
+```{r}
+print(paste("Min MSE = ", min(mse) ))
+print(paste("Best K = ", lambdas[which.min(mse)] ))
+```
+
+
+### Apply smoothing spline for best value of lambda (min MSE) lambda = 1.27e-05
+```{r}
+sm = smooth.spline(Y, nknots=k, lambda=best_lambda)
+plot(X,Y,col = "red",lwd=3)
+lines(X,sm$y,col = "black",lwd=3) 
+```
+
+# D) Kernel smoother
+
+```{r}
+# kernel function
+kerf = function(z){exp(-z*z/2)/sqrt(2*pi)}
+
+# leave-one-out CV
+h1=seq(1,4,0.1)
+er = rep(0, length(Y))
+mse = rep(0, length(h1))
+for(j in 1:length(h1))
+{
+  h=h1[j]
+  for(i in 1:length(X))
+  {
+    X1=X[-i];
+    Y1=Y[-i];
+    z=kerf((X[i]-X1)/h)
+    yke=sum(z*Y1)/sum(z)
+    er[i]=Y[i]-yke
+  }
+  mse[j]=sum(er^2)
+}
+plot(h1,mse,type = "l")
+h = h1[which.min(mse)]
+
+```
+
+
+### Report min MSE and best lambda
+```{r}
+print(paste("Min MSE = ", min(mse) ))
+print(paste("Best K = ", h1[which.min(mse)] ))
+```
+
+### Apply smoother for best lambda value lambda = 1
+```{r}
+N=138
+xall = seq(min(X),max(X),length.out = N)
+f = rep(0,N);
+for(k in 1:N)
+{
+  z=kerf((xall[k]-X)/h)
+  f[k]=sum(z*Y)/sum(z);
+}
+ytrue = sin(xall/10)+(xall/50)^2
+plot(X,Y,col = "black")
+lines(xall,ytrue,col = "red")
+lines(xall, f, col = "blue")
+```
+
+
+
+
+
+
+
+

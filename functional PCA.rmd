@@ -1,0 +1,178 @@
+---
+title: "Functional PCA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read the Data
+```{r}
+train_data <- as.matrix(read.table("ECG200TRAIN",sep=",",stringsAsFactors = FALSE, header=FALSE))
+test_data <- as.matrix(read.table("ECG200TEST",sep=",",stringsAsFactors = FALSE, header=FALSE))
+
+```
+
+### combine data into one big table
+```{r}
+data = rbind(train_data,test_data)
+X = data[,2:97]
+Y = data[,1]
+```
+
+### split features and labels
+```{r}
+X_train = train_data[,2:97]
+Y_train = train_data[,1]
+
+X_test = test_data[,2:97]
+Y_test = test_data[,1]
+```
+
+### Plot the failed heart readings (red) vs the normal (blue) on train data
+```{r}
+matplot(t(X_train),type = "l",ylab = "y",col = "blue")
+X_train_fail = X_train[Y_train == -1,]
+Y_train_fail = Y_train[Y_train == -1]
+for(i in 1:length(Y_train_fail))
+{
+  lines(X_train_fail[i,],col = "red")
+}
+```
+
+
+# A) Using B-spline
+
+```{r}
+library(splines)
+library(caret) 
+library(randomForest)
+set.seed(123)
+```
+
+
+### Create B-Spline basis on the whole data, train and test
+```{r}
+k=8
+nbasis= k+4-2
+n=dim(X)[2] #96
+
+x = seq(0,1,length=n)
+knots = seq(0,1,length.out = k)
+B = bs(x, knots = knots, degree = 3)[,1:nbasis]
+Bcoef = matrix(0,dim(X)[1],nbasis)
+for(i in 1:dim(X)[1])
+{
+  Bcoef[i,] = solve(t(B)%*%B)%*%t(B)%*%X[i,]
+}
+
+Bcoef_train = Bcoef[1:100,]
+Bcoef_test =  Bcoef[101:200,]
+```
+
+### Fit Random Forest Model on the Training data
+```{r}
+N=cbind.data.frame(as.data.frame(Bcoef_train),Y_train)
+fit = randomForest(Y_train ~ ., data=N)
+```
+
+
+### Use the fitted Model to predict on test data 
+```{r}
+pred = predict(fit,Bcoef_test)
+
+# apply thresholds on prediction
+pred[pred < 0] = -1  
+pred[pred >= 0] = 1
+
+
+
+matplot(x,t(X_test[pred>=0,]),type="l",col = "blue",ylab = "y",ylim = c(-4,4),main="Classification using B-spline coefficients")
+
+X2 = X_test[pred < 0,]
+for(i in 1:length(pred[pred < 0]))
+{
+  lines(x,X2[i,],col = "red")
+}
+
+```
+
+### confusion matrix says 88% accuracy and 83% senstivity
+```{r}
+
+xtab = table(Y_test,pred)
+confusionMatrix(xtab)
+```
+
+# B) Using FPCA
+
+```{r}
+library(fda)
+```
+
+
+### Generate functional data from input
+```{r}
+k=8
+nbasis= k+4-2
+n=dim(X)[2] #96
+
+x = seq(0,1,length=n)
+
+splinebasis = create.bspline.basis(c(0,1),nbasis)
+smooth = smooth.basis(x,t(X),splinebasis)
+
+Xfun = smooth$fd
+```
+
+
+### apply functional PCA to calculate 10 components
+```{r}
+pca = pca.fd(Xfun, 10)
+var.pca = cumsum(pca$varprop)
+nharm = sum(var.pca < 0.95) + 1
+pc = pca.fd(Xfun, nharm)
+plot(pc$scores[Y==1,],xlab = "FPC-score 1", ylab = "FPC-score 2",col = "blue",ylim=c(-1,1))
+points(pc$scores[Y==-1,],col = "red")
+
+FPCcoef_train = pc$scores[1:100,]
+FPCcoef_test = pc$scores[101:200,]
+```
+
+
+
+
+### Fit Random Forest Model on the Training data
+```{r}
+N=cbind.data.frame(as.data.frame(FPCcoef_train),Y_train)
+fit = randomForest(Y_train ~ ., data=N)
+```
+
+
+```{r}
+pred = predict(fit,FPCcoef_test)
+
+
+# apply thresholds on prediction
+pred[pred < 0] = -1  
+pred[pred >= 0] = 1
+
+
+
+matplot(x,t(X_test[pred>=0,]),type="l",col = "blue",ylab = "y",ylim = c(-4,4),main="Classification using FPCA coefficients")
+
+X2 = X_test[pred < 0,]
+for(i in 1:length(pred[pred < 0]))
+{
+  lines(x,X2[i,],col = "red")
+}
+```
+
+### confusion matrix says 83% accuracy and 79% senstivity
+```{r}
+
+xtab = table(Y_test,pred)
+confusionMatrix(xtab)
+```
+
